@@ -51,25 +51,28 @@ def download_file(file_info, file_name):
     return False
 
 # Upload file to Telegraph
-# Replace the upload_to_telegraph function
+# Replace upload_to_telegraph with this
 def upload_to_telegraph(file_path):
     try:
+        url = 'https://telegra.ph/upload'
         with open(file_path, 'rb') as f:
-            response = telegraph.upload_file(f)
-        logger.info(f"Telegraph response: {response}")
-        if isinstance(response, str):
-            # If response is a direct URL string, use it
-            return response if response.startswith('http') else None
-        elif isinstance(response, list) and response:
-            # Expected JSON list with src
-            return response[0].get('src')
+            response = requests.post(url, files={'file': f})
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"Raw Telegraph response: {data}")
+            if isinstance(data, list) and data:
+                return data[0].get('src')
+            elif isinstance(data, str) and data.startswith('http'):
+                return data
+            else:
+                logger.error(f"Unexpected JSON format: {data}")
+                return None
         else:
-            logger.error(f"Unexpected response format: {type(response)}")
+            logger.error(f"Upload failed with status {response.status_code}: {response.text}")
             return None
     except Exception as e:
         logger.error(f"Telegraph upload failed: {e}")
         return None
-
 # Start command handler
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
