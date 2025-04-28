@@ -51,12 +51,12 @@ def download_file(file_info, file_name):
     return False
 
 # Upload file to Telegraph
-# Update the upload_to_telegraph function
+# Replace upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
         url = 'https://telegra.ph/upload'
         access_token = os.getenv('TELEGRAPH_ACCESS_TOKEN')
-        headers = {'User-Agent': 'MediaToTelegraphBot/1.0'}
+        headers = {'User-Agent': 'MediaToTelegraphBot/1.0', 'Content-Type': 'multipart/form-data'}
         if access_token:
             headers['Authorization'] = f'Bearer {access_token}'
             logger.info(f"Using Telegraph access token: {access_token[:10]}... (truncated for security)")
@@ -64,8 +64,16 @@ def upload_to_telegraph(file_path):
             logger.warning("No Telegraph access token provided; attempting public upload.")
             bot.reply_to(message, "No Telegraph token found. Please set TELEGRAPH_ACCESS_TOKEN in .env.")
             return None
+        file_extension = os.path.splitext(file_path)[1].lower()
+        mime_type = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.mp4': 'video/mp4'
+        }.get(file_extension, 'application/octet-stream')
         with open(file_path, 'rb') as f:
-            files = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
+            files = {'file': (os.path.basename(file_path), f, mime_type)}
             response = requests.post(url, files=files, headers=headers)
         logger.info(f"Request URL: {url}")
         logger.info(f"Response status: {response.status_code}")
