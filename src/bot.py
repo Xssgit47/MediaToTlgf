@@ -52,10 +52,6 @@ def download_file(file_info, file_name):
 
 # Upload file to Telegraph
 # In handle_media, before upload_to_telegraph
-# Download file
-if not download_file(file_info, file_name):
-    bot.reply_to(message, "Failed to download the file. Try again!")
-    return
 
 # Log file details
 file_size = os.path.getsize(file_name)
