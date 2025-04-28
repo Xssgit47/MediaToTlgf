@@ -56,10 +56,15 @@ def upload_to_telegraph(file_path):
     try:
         url = 'https://telegra.ph/upload'
         with open(file_path, 'rb') as f:
-            response = requests.post(url, files={'file': f})
+            files = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
+            headers = {'User-Agent': 'MediaToTelegraphBot/1.0'}
+            response = requests.post(url, files=files, headers=headers)
+        logger.info(f"Request URL: {url}")
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response text: {response.text}")
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Raw Telegraph response: {data}")
+            logger.info(f"Parsed response: {data}")
             if isinstance(data, list) and data:
                 return data[0].get('src')
             elif isinstance(data, str) and data.startswith('http'):
