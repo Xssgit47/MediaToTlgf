@@ -89,18 +89,13 @@ def upload_to_telegraph(file_path):
             logger.info(f"Using Telegraph access token: {access_token[:10]}... (truncated for security)")
         else:
             logger.warning("No Telegraph access token provided; attempting public upload.")
-            return None  # Skip upload if no token
-        # Read file content into memory
+            return None
+        # Detect MIME type
+        import magic
+        mime_type = magic.from_file(file_path, mime=True)
+        logger.info(f"Sending file with MIME type: {mime_type}")
         with open(file_path, 'rb') as f:
             file_content = f.read()
-        file_extension = os.path.splitext(file_path)[1].lower()
-        mime_type = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.mp4': 'video/mp4'
-        }.get(file_extension, 'application/octet-stream')
         files = {'file': (os.path.basename(file_path), file_content, mime_type)}
         response = requests.post(url, files=files, headers=headers)
         logger.info(f"Request URL: {url}")
