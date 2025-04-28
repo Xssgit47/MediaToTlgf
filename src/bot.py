@@ -6,6 +6,12 @@ import logging
 from uuid import uuid4
 from dotenv import load_dotenv
 
+# Try to import python-magic, with a fallback for cross-platform compatibility
+try:
+    import magic
+except ImportError:
+    import magic as magic_bin  # Fallback for python-magic-bin on some systems
+
 # Load environment variables
 load_dotenv()
 
@@ -30,6 +36,7 @@ telegraph = Telegraph(access_token=TELEGRAPH_ACCESS_TOKEN)
 
 # Supported media types
 SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4']
+SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4']
 
 # Create a Telegraph account if no access token
 def create_telegraph_account():
@@ -42,39 +49,22 @@ def create_telegraph_account():
 
 # Download file from Telegram
 def download_file(file_info, file_name):
-    file_url = bot.get_file_url(file_info.file_id)
-    response = requests.get(file_url)
-    if response.status_code == 200:
-        with open(file_name, 'wb') as f:
-            f.write(response.content)
-        return True
-    return False
+    try:
+        file_url = bot.get_file_url(file_info.file_id)
+        logger.info(f"Downloading file from {file_url}")
+        response = requests.get(file_url)
+        if response.status_code == 200:
+            with open(file_name, 'wb') as f:
+                f.write(response.content)
+            logger.info(f"File saved as {file_name}, size={os.path.getsize(file_name)} bytes")
+            return True
+        logger.error(f"Download failed: {response.status_code}")
+        return False
+    except Exception as e:
+        logger.error(f"Download error: {e}")
+        return False
 
 # Upload file to Telegraph
-# In handle_media, before upload_to_telegraph
-
-# Log file details
-file_size = os.path.getsize(file_name)
-logger.info(f"Processing file: name={os.path.basename(file_name)}, size={file_size} bytes, ext={file_ext}")
-if file_size > 5 * 1024 * 1024:  # 5MB limit
-    bot.reply_to(message, f"File is too large for Telegraph (max 5MB). Got {file_size / 1024 / 1024:.2f}MB.")
-    if os.path.exists(file_name):
-        os.remove(file_name)
-    return
-
-# Validate file type with magic bytes
-import magic
-file_mime = magic.from_file(file_name, mime=True)
-logger.info(f"File MIME type: {file_mime}")
-if file_mime not in ['image/jpeg', 'image/png', 'image/gif', 'video/mp4']:
-    bot.reply_to(message, f"Unsupported file type: {file_mime}. Please use JPG, PNG, GIF, or MP4.")
-    if os.path.exists(file_name):
-        os.remove(file_name)
-    return
-
-# Upload to Telegraph
-telegraph_url = upload_to_telegraph(file_name)
-# Replace upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
         url = 'https://telegra.ph/upload'
@@ -86,17 +76,31 @@ def upload_to_telegraph(file_path):
         else:
             logger.warning("No Telegraph access token provided; attempting public upload.")
             return None
-        # Detect MIME type
-        import magic
-        mime_type = magic.from_file(file_path, mime=True)
-        logger.info(f"Sending file with MIME type: {mime_type}")
+
+        # Read file content
         with open(file_path, 'rb') as f:
             file_content = f.read()
+
+        # Validate file size
+        file_size = os.path.getsize(file_path)
+        if file_size > 5 * 1024 * 1024:  # 5MB limit
+            logger.error(f"File too large: {file_size} bytes")
+            return None
+
+        # Detect MIME type
+        mime_type = magic.from_file(file_path, mime=True)
+        logger.info(f"Sending file with MIME type: {mime_type}")
+        if mime_type not in SUPPORTED_MIME_TYPES:
+            logger.error(f"Unsupported MIME type: {mime_type}")
+            return None
+
+        # Construct the request
         files = {'file': (os.path.basename(file_path), file_content, mime_type)}
         response = requests.post(url, files=files, headers=headers)
         logger.info(f"Request URL: {url}")
         logger.info(f"Response status: {response.status_code}")
         logger.info(f"Response text: {response.text}")
+
         if response.status_code == 200:
             data = response.json()
             logger.info(f"Parsed response: {data}")
@@ -113,6 +117,7 @@ def upload_to_telegraph(file_path):
     except Exception as e:
         logger.error(f"Telegraph upload failed: {e}")
         return None
+
 # Start command handler
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -156,6 +161,24 @@ def handle_media(message):
             bot.reply_to(message, "Failed to download the file. Try again!")
             return
 
+        # Log file details
+        file_size = os.path.getsize(file_name)
+        logger.info(f"Processing file: name={os.path.basename(file_name)}, size={file_size} bytes, ext={file_ext}")
+        if file_size > 5 * 1024 * 1024:  # 5MB limit
+            bot.reply_to(message, f"File is too large for Telegraph (max 5MB). Got {file_size / 1024 / 1024:.2f}MB.")
+            if os.path.exists(file_name):
+                os.remove(file_name)
+            return
+
+        # Validate file type with magic bytes
+        file_mime = magic.from_file(file_name, mime=True)
+        logger.info(f"File MIME type: {file_mime}")
+        if file_mime not in SUPPORTED_MIME_TYPES:
+            bot.reply_to(message, f"Unsupported file type: {file_mime}. Please use JPG, PNG, GIF, or MP4.")
+            if os.path.exists(file_name):
+                os.remove(file_name)
+            return
+
         # Upload to Telegraph
         telegraph_url = upload_to_telegraph(file_name)
         if telegraph_url:
@@ -166,7 +189,10 @@ def handle_media(message):
                 parse_mode='HTML'
             )
         else:
-            bot.reply_to(message, "Failed to upload to Telegraph. Please try again.")
+            bot.reply_to(message, "Failed to upload to Telegraph. Check logs for details or try again.")
+            if os.path.exists(file_name):
+                os.remove(file_name)
+            return
 
         # Clean up
         if os.path.exists(file_name):
@@ -175,6 +201,8 @@ def handle_media(message):
     except Exception as e:
         logger.error(f"Error processing media: {e}")
         bot.reply_to(message, "Something went wrong! Please try again.")
+        if os.path.exists(file_name):
+            os.remove(file_name)
 
 # Handle unsupported content
 @bot.message_handler(content_types=['text', 'audio', 'sticker', 'location', 'contact'])
