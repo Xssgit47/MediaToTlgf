@@ -64,7 +64,7 @@ def download_file(file_info, file_name):
         logger.error(f"Download error: {e}")
         return False
 
-# Upload file to Telegraph
+# Replace upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
         url = 'https://telegra.ph/upload'
@@ -76,6 +76,51 @@ def upload_to_telegraph(file_path):
         else:
             logger.warning("No Telegraph access token provided; attempting public upload.")
             return None
+
+        # Read file content
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
+
+        # Validate file size
+        file_size = os.path.getsize(file_path)
+        if file_size > 5 * 1024 * 1024:  # 5MB limit
+            logger.error(f"File too large: {file_size} bytes")
+            return None
+
+        # Detect MIME type
+        mime_type = magic.from_file(file_path, mime=True)
+        logger.info(f"Sending file with MIME type: {mime_type}")
+        if mime_type not in SUPPORTED_MIME_TYPES:
+            logger.error(f"Unsupported MIME type: {mime_type}")
+            return None
+
+        # Log file content preview (first 10 bytes)
+        logger.info(f"File content preview (first 10 bytes): {file_content[:10]}")
+
+        # Construct the request (simplified)
+        files = {'file': (os.path.basename(file_path), file_content, mime_type)}
+        response = requests.post(url, files=files, headers=headers)
+        logger.info(f"Request URL: {url}")
+        logger.info(f"Request headers: {headers}")
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response text: {response.text}")
+
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"Parsed response: {data}")
+            if isinstance(data, list) and data:
+                return data[0].get('src')
+            elif isinstance(data, str) and data.startswith('http'):
+                return data
+            else:
+                logger.error(f"Unexpected JSON format: {data}")
+                return None
+        else:
+            logger.error(f"Upload failed with status {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Telegraph upload failed: {e}")
+        return None
 
         # Read file content
         with open(file_path, 'rb') as f:
