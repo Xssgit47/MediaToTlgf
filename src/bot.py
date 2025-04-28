@@ -51,6 +51,33 @@ def download_file(file_info, file_name):
     return False
 
 # Upload file to Telegraph
+# In handle_media, before upload_to_telegraph
+# Download file
+if not download_file(file_info, file_name):
+    bot.reply_to(message, "Failed to download the file. Try again!")
+    return
+
+# Log file details
+file_size = os.path.getsize(file_name)
+logger.info(f"Processing file: name={os.path.basename(file_name)}, size={file_size} bytes, ext={file_ext}")
+if file_size > 5 * 1024 * 1024:  # 5MB limit
+    bot.reply_to(message, f"File is too large for Telegraph (max 5MB). Got {file_size / 1024 / 1024:.2f}MB.")
+    if os.path.exists(file_name):
+        os.remove(file_name)
+    return
+
+# Validate file type with magic bytes
+import magic
+file_mime = magic.from_file(file_name, mime=True)
+logger.info(f"File MIME type: {file_mime}")
+if file_mime not in ['image/jpeg', 'image/png', 'image/gif', 'video/mp4']:
+    bot.reply_to(message, f"Unsupported file type: {file_mime}. Please use JPG, PNG, GIF, or MP4.")
+    if os.path.exists(file_name):
+        os.remove(file_name)
+    return
+
+# Upload to Telegraph
+telegraph_url = upload_to_telegraph(file_name)
 # Replace upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
