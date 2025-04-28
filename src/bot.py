@@ -51,11 +51,21 @@ def download_file(file_info, file_name):
     return False
 
 # Upload file to Telegraph
+# Replace the upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
         with open(file_path, 'rb') as f:
             response = telegraph.upload_file(f)
-        return response[0]['src']
+        logger.info(f"Telegraph response: {response}")
+        if isinstance(response, str):
+            # If response is a direct URL string, use it
+            return response if response.startswith('http') else None
+        elif isinstance(response, list) and response:
+            # Expected JSON list with src
+            return response[0].get('src')
+        else:
+            logger.error(f"Unexpected response format: {type(response)}")
+            return None
     except Exception as e:
         logger.error(f"Telegraph upload failed: {e}")
         return None
