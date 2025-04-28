@@ -51,13 +51,21 @@ def download_file(file_info, file_name):
     return False
 
 # Upload file to Telegraph
-# Replace upload_to_telegraph with this
+# Update the upload_to_telegraph function
 def upload_to_telegraph(file_path):
     try:
         url = 'https://telegra.ph/upload'
+        access_token = os.getenv('TELEGRAPH_ACCESS_TOKEN')
+        headers = {'User-Agent': 'MediaToTelegraphBot/1.0'}
+        if access_token:
+            headers['Authorization'] = f'Bearer {access_token}'
+            logger.info(f"Using Telegraph access token: {access_token[:10]}... (truncated for security)")
+        else:
+            logger.warning("No Telegraph access token provided; attempting public upload.")
+            bot.reply_to(message, "No Telegraph token found. Please set TELEGRAPH_ACCESS_TOKEN in .env.")
+            return None
         with open(file_path, 'rb') as f:
             files = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
-            headers = {'User-Agent': 'MediaToTelegraphBot/1.0'}
             response = requests.post(url, files=files, headers=headers)
         logger.info(f"Request URL: {url}")
         logger.info(f"Response status: {response.status_code}")
